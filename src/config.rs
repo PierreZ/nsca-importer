@@ -3,7 +3,7 @@ use configrs::{ConfigError, Config, File};
 
 #[derive(Debug, Deserialize)]
 pub struct Server {
-    pub port: i64,
+    pub address: String,
 }
 
 #[derive(Debug, Deserialize)]

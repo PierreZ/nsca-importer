@@ -30,6 +30,10 @@ fn main() -> Result<(), Box<Error>> {
     let setting = config::Settings::from(opt.config)?;
     
     info!("Starting nsca-importer with {:?}", setting);
+
+    let server = nsca::server::new(setting.server)?;
+
+    server.run();
     
     Ok(())
 }
