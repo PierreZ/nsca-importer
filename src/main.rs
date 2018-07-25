@@ -29,9 +29,9 @@ fn main() -> Result<(), Box<Error>> {
 
     info!("Starting nsca-importer with {:?}", setting);
 
-    let server = nsca::server::new(setting.server)?;
+    let server = nsca::new(setting.server)?;
 
-    server.run();
+    server.listen();
 
     Ok(())
 }
