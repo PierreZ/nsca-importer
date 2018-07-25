@@ -1,11 +1,12 @@
 use config::Server;
 use std::net::SocketAddr;
 
+use codec;
 use std::net::AddrParseError;
 use tokio;
 use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use tokio::prelude::*;
-use tokio_codec::LinesCodec;
 
 pub struct NSCAServer {
     addr: SocketAddr,
@@ -22,16 +23,7 @@ impl NSCAServer {
 
         let server = listener
             .incoming()
-            .for_each(move |socket| {
-                let framed_sock = socket.framed(LinesCodec::new());
-                framed_sock
-                    .for_each(|line| {
-                        println!("Received line {}", line);
-                        Ok(())
-                    })
-                    .map_err(|e| println!("failed to connect; err = {:?}", e));
-                Ok(())
-            })
+            .for_each(|socket| Ok(()))
             .map_err(|err| {
                 // Handle error by printing to STDOUT.
                 println!("accept error = {:?}", err);
