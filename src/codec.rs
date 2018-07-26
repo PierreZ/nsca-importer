@@ -1,107 +1,83 @@
 use bytes::{BufMut, BytesMut};
-use tokio::io;
-use tokio::net::TcpStream;
-use tokio::prelude::*;
+use std::io;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio_codec::{Decoder, Encoder};
 
-pub(crate) struct NSCACodec {
-    socket: TcpStream,
-    rd: BytesMut,
-    wr: BytesMut,
+#[derive(Debug)]
+pub struct Packet<T: ToBytes> {
+    pub packet_type: PacketType,
+    pub payload: T,
+}
+
+pub trait ToBytes {
+    fn to_bytes(&self, buf: &mut BytesMut) -> Result<(), io::Error>;
+}
+
+#[derive(Debug)]
+pub enum PacketType {
+    INIT,
+    DATA,
+}
+
+#[derive(Debug)]
+pub struct InitPacket {}
+
+impl ToBytes for InitPacket {
+    fn to_bytes(&self, buf: &mut BytesMut) -> Result<(), io::Error> {
+        buf.reserve(128 + 32);
+        // TODO random IV
+        for i in 0..127 {
+            buf.put_uint_be(i, 1);
+        }
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        buf.put_u32_be(timestamp.as_secs() as u32);
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DataPacket {}
+
+impl ToBytes for DataPacket {
+    fn to_bytes(&self, buf: &mut BytesMut) -> Result<(), io::Error> {
+        // TODO
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+pub struct NSCACodec {
+    pos: usize,
 }
 
 impl NSCACodec {
-    /// Create a new `NSCACodec` codec backed by the socket
-    pub(crate) fn new(socket: TcpStream) -> Self {
-        NSCACodec {
-            socket,
-            rd: BytesMut::new(),
-            wr: BytesMut::new(),
-        }
-    }
-
-    /// Buffer a line.
-    ///
-    /// This writes the line to an internal buffer. Calls to `poll_flush` will
-    /// attempt to flush this buffer to the socket.
-    fn buffer(&mut self, line: &[u8]) {
-        // Ensure the buffer has capacity. Ideally this would not be unbounded,
-        // but to keep the example simple, we will not limit this.
-        self.wr.reserve(line.len());
-
-        // Push the line onto the end of the write buffer.
-        //
-        // The `put` function is from the `BufMut` trait.
-        self.wr.put(line);
-    }
-
-    /// Flush the write buffer to the socket
-    fn poll_flush(&mut self) -> Poll<(), io::Error> {
-        // As long as there is buffered data to write, try to write it.
-        while !self.wr.is_empty() {
-            // Try to write some bytes to the socket
-            let n = try_ready!(self.socket.poll_write(&self.wr));
-
-            // As long as the wr is not empty, a successful write should
-            // never write 0 bytes.
-            assert!(n > 0);
-
-            // This discards the first `n` bytes of the buffer.
-            let _ = self.wr.split_to(n);
-        }
-
-        Ok(Async::Ready(()))
-    }
-
-    /// Read data from the socket.
-    ///
-    /// This only returns `Ready` when the socket has closed.
-    fn fill_read_buf(&mut self) -> Poll<(), io::Error> {
-        loop {
-            // Ensure the read buffer has capacity.
-            //
-            // This might result in an internal allocation.
-            self.rd.reserve(1024);
-
-            // Read data into the buffer.
-            let n = try_ready!(self.socket.read_buf(&mut self.rd));
-
-            if n == 0 {
-                return Ok(Async::Ready(()));
-            }
-        }
+    pub fn new() -> NSCACodec {
+        NSCACodec { pos: 0 }
     }
 }
 
-impl Stream for NSCACodec {
-    type Item = BytesMut;
+impl Decoder for NSCACodec {
+    type Item = Packet<DataPacket>;
     type Error = io::Error;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        // First, read any new data that might have been received off the socket
-        let sock_closed = self.fill_read_buf()?.is_ready();
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // TODO: nom?
+        Ok(Some(Packet {
+            packet_type: PacketType::DATA,
+            payload: DataPacket {},
+        }))
+    }
+}
 
-        // Now, try finding NSCACodec
-        let pos = self.rd
-            .windows(2)
-            .enumerate()
-            .find(|&(_, bytes)| bytes == b"\r\n")
-            .map(|(i, _)| i);
+impl Encoder for NSCACodec {
+    type Item = Packet<InitPacket>;
+    type Error = io::Error;
 
-        if let Some(pos) = pos {
-            // Remove the line from the read buffer and set it to `line`.
-            let mut line = self.rd.split_to(pos + 2);
-
-            // Drop the trailing \r\n
-            line.split_off(pos);
-
-            // Return the line
-            return Ok(Async::Ready(Some(line)));
-        }
-
-        if sock_closed {
-            Ok(Async::Ready(None))
-        } else {
-            Ok(Async::NotReady)
-        }
+    fn encode(&mut self, packet: Packet<InitPacket>, buf: &mut BytesMut) -> Result<(), io::Error> {
+        packet.payload.to_bytes(buf)
     }
 }
