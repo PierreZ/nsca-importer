@@ -33,9 +33,17 @@ impl NSCAServer {
                 let r_framed = FramedRead::new(r, data::Codec::new());
                 let w_framed = FramedWrite::new(w, init::Codec::new());
 
-                // client is waiting for an init packet before sending data
-                // let's push it
-                // ?
+                // client is waiting for an init packet before sending data, let's push it
+                let writing_future = w_framed
+                    .send(init::InitPacket::new())
+                    .and_then(|_| {
+                        println!("sent init packet!");
+                        Ok(())
+                    })
+                    .map_err(|e| {
+                        eprintln!("error writing init packet: {}", e);
+                    });
+                tokio::spawn(writing_future);
 
                 // reading data in a dedicated future
                 let reading_future = r_framed
@@ -44,6 +52,7 @@ impl NSCAServer {
                         println!("{:?}", data);
                         Ok(())
                     });
+
                 tokio::spawn(reading_future);
 
                 Ok(())
