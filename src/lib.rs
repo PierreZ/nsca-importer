@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate nom;
 extern crate byteorder;
 extern crate bytes;
 extern crate config as configrs;
-#[macro_use]
-extern crate futures;
 extern crate tokio;
 extern crate tokio_codec;
 
