@@ -45,9 +45,9 @@ named!(parse_data<&[u8], DataPacket>,do_parse!(
     crc: be_u32 >>
     timestamp: be_u32 >>
     state: be_i16 >>
-    hostname: take!(64) >> // hostname: take_until_and_consume!("\x00") >>
-    service: take!(128) >>
-    plugin_output: take_until_and_consume!("\x00") >>
+    hostname: flat_map!(take!(64), take_until_and_consume!("\x00")) >> 
+    service: flat_map!(take!(128), take_until_and_consume!("\x00")) >>
+    plugin_output: flat_map!(take!(512), take_until_and_consume!("\x00")) >>
 
     // constructing DataPacket
     (DataPacket::new(version, crc, timestamp, state, hostname, service, plugin_output))
